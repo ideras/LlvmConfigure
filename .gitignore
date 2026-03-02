@@ -1,0 +1,42 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Output directories (if you build into one)
+bin/
+dist/
+build/
+
+# Go build cache (usually not needed in repo)
+*.coverprofile
+coverage.out
+
+# Dependency directories (if not using Go modules — rare today)
+vendor/
+
+# IDEs / Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Go workspace file (optional, commit only if intentional)
+go.work
+go.work.sum
+
+# Environment files
+.env
+.env.local
+
+# Linux executable file
+llvm-configure
