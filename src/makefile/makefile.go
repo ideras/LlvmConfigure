@@ -71,10 +71,6 @@ func Build(buildFolder, srcFolder string, useMusl bool, llvmTools *tools.LLVMToo
 	fmt.Fprintf(file, "\n")
 	fmt.Fprintf(file, "all: $(EXE)\n")
 	fmt.Fprintf(file, "\n")
-	fmt.Fprintf(file, "# Pattern rule: Generate bitcode from LLVM IR files\n")
-	fmt.Fprintf(file, "%%.bc: %%.ll\n")
-	fmt.Fprintf(file, "\t$(LLVM_AS) $< -o $@\n")
-	fmt.Fprintf(file, "\n")
 	fmt.Fprintf(file, "# Pattern rule: Generate object files from bitcode\n")
 	fmt.Fprintf(file, "%%.o: %%.bc\n")
 	fmt.Fprintf(file, "\t$(LLC) $< -filetype=obj -o $@\n")
@@ -100,11 +96,13 @@ func Build(buildFolder, srcFolder string, useMusl bool, llvmTools *tools.LLVMToo
 	fmt.Fprintf(file, "\t@echo \"Re-running configuration from LLVMSources.txt...\"\n")
 	fmt.Fprintf(file, "\t@%s -B %s -S %s\n", exePath, buildFolder, srcFolder)
 	fmt.Fprintf(file, "\n")
-	fmt.Fprintf(file, "# Individual bitcode targets (for explicit building)")
+	fmt.Fprintf(file, "# Individual bitcode targets")
 
 	for i, asmFile := range asmFiles {
 		base := strings.TrimSuffix(filepath.Base(asmFile), ".ll")
-		fmt.Fprintf(file, "\n%s.bc: %s", base, relSrcFiles[i])
+		fmt.Fprintf(file, "\n%s.bc: %s\n", base, relSrcFiles[i])
+		fmt.Fprintf(file, "\t$(LLVM_AS) $< -o $@\n")
+		fmt.Fprintf(file, "\n")
 	}
 
 	fmt.Fprintf(file, "\n")
