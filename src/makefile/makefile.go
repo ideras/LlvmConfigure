@@ -46,8 +46,14 @@ func Build(buildFolder, srcFolder string, useMusl bool, llvmTools *tools.LLVMToo
 
 	// Generate relative paths from build folder
 	var relSrcFiles []string
+
+	buildFolderAbs, err := filepath.Abs(buildFolder)
+	if err != nil {
+		buildFolderAbs = buildFolder
+	}
+
 	for _, asmFile := range asmFiles {
-		relPath, err := filepath.Rel(buildFolder, asmFile)
+		relPath, err := filepath.Rel(buildFolderAbs, asmFile)
 		if err != nil {
 			relPath = asmFile
 		}
@@ -56,12 +62,20 @@ func Build(buildFolder, srcFolder string, useMusl bool, llvmTools *tools.LLVMToo
 
 	// Generate file lists
 	srcFiles := strings.Join(relSrcFiles, " ")
-	var bcFiles []string
-	var objFiles []string
-	for _, asmFile := range asmFiles {
+
+	bcFiles := make([]string, len(asmFiles))
+	objFiles := make([]string, len(asmFiles))
+	targets := make([]BitcodeTarget, len(asmFiles))
+
+	for i, asmFile := range asmFiles {
 		base := strings.TrimSuffix(filepath.Base(asmFile), ".ll")
-		bcFiles = append(bcFiles, base+".bc")
-		objFiles = append(objFiles, base+".o")
+		bcFiles[i] = base + ".bc"
+		objFiles[i] = base + ".o"
+
+		targets[i] = BitcodeTarget{
+			BaseName: base,
+			SrcFile:  relSrcFiles[i],
+		}
 	}
 
 	if exeName == "" {
@@ -79,15 +93,6 @@ func Build(buildFolder, srcFolder string, useMusl bool, llvmTools *tools.LLVMToo
 	exePath, _ := os.Executable()
 
 	tmpl := template.Must(template.New("makefile").Parse(makefileTemplate))
-
-	targets := make([]BitcodeTarget, len(asmFiles))
-
-	for i, asmFile := range asmFiles {
-		targets[i] = BitcodeTarget{
-			BaseName: strings.TrimSuffix(filepath.Base(asmFile), ".ll"),
-			SrcFile:  relSrcFiles[i],
-		}
-	}
 
 	data := MakefileData{
 		LlvmAs:         llvmTools.LlvmAs,

@@ -15,7 +15,7 @@ fi
 
 BIN_NAME="llvm-configure"
 
-(cd "$GO_DIR" && CGO_ENABLED=0 go build -ldflags="-s -w" -o "$ROOT_DIR/$BIN_NAME" ./cmd/llvm-configure)
+(cd "$GO_DIR" && CGO_ENABLED=0 go build -ldflags="-s -w" -o "$ROOT_DIR/build/$BIN_NAME" ./cmd/llvm-configure)
 
 if [ $? -ne 0 ]; then
     echo "Build failed."

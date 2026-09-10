@@ -32,7 +32,7 @@ func FindLibC() (map[string]string, error) {
 		return libcPaths, nil
 	}
 
-	return nil, fmt.Errorf("GNU libc not found")
+	return nil, fmt.Errorf("Standard Libc not found")
 }
 
 // CheckObjectFiles checks if required object files exist in the libc path
