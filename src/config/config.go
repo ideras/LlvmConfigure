@@ -28,14 +28,22 @@ type Config struct {
 	LibC LibCConfig `json:"libc"`
 }
 
-// LoadConfigFile loads configuration from ~/.llvm-configure/config.json
-func LoadConfigFile() (*Config, error) {
+func configFilePath() (string, error) {
 	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(homeDir, ".llvm-configure", "config.json"), nil
+}
+
+// LoadConfigFile loads configuration from ~/.llvm-configure/config.json.
+func LoadConfigFile() (*Config, error) {
+	configPath, err := configFilePath()
 	if err != nil {
 		return nil, err
 	}
 
-	configPath := filepath.Join(homeDir, ".llvm-configure", "config.json")
 	config := &Config{}
 
 	data, err := os.ReadFile(configPath)
@@ -53,24 +61,24 @@ func LoadConfigFile() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
 	}
 
-	if config.LLVM.LlvmAs != "" {
-		fmt.Printf("Found LLVM_AS in config: %s%s%s\n", ui.ColorCyan, config.LLVM.LlvmAs, ui.ColorReset)
-	}
-	if config.LLVM.Llc != "" {
-		fmt.Printf("Found LLC in config: %s%s%s\n", ui.ColorCyan, config.LLVM.Llc, ui.ColorReset)
-	}
-	if config.LLVM.Lld != "" {
-		fmt.Printf("Found LLD in config: %s%s%s\n", ui.ColorCyan, config.LLVM.Lld, ui.ColorReset)
-	}
-	if config.LibC.Path != "" {
-		fmt.Printf("Found LIBC path in config: %s%s%s\n", ui.ColorCyan, config.LibC.Path, ui.ColorReset)
-	}
-	if config.LibC.DynLinkerPath != "" {
-		fmt.Printf("Found dynamic linker in config: %s%s%s\n", ui.ColorCyan, config.LibC.DynLinkerPath, ui.ColorReset)
-	}
-	if config.LibC.UseMusl {
-		fmt.Printf("Config specifies MUSL C library\n")
+	return config, nil
+}
+
+// SaveConfigFile writes configuration to ~/.llvm-configure/config.json.
+func SaveConfigFile(config *Config) error {
+	configPath, err := configFilePath()
+	if err != nil {
+		return err
 	}
 
-	return config, nil
+	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+		return err
+	}
+
+	data, err := json.MarshalIndent(config, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to encode config JSON: %w", err)
+	}
+
+	return os.WriteFile(configPath, append(data, '\n'), 0644)
 }

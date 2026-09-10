@@ -97,8 +97,28 @@ go build -o ../llvm-configure ./cmd/llvm-configure
 Run via Make:
 
 ```bash
-make run -- -B build -S .
+make run ARGS="-B build -S ."
 ```
+
+Check whether the required LLVM tools are installed:
+
+```bash
+make run ARGS="--check-llvm"
+```
+
+Check whether musl libc is installed:
+
+```bash
+make run ARGS="--check-musl"
+```
+
+Refresh the LLVM paths in `~/.llvm-configure/config.json` from the current system `PATH`:
+
+```bash
+make run ARGS="--scan-llvm"
+```
+
+`--check-llvm` prints the status of each configured path and any fallback discovered in `PATH`. The checks can be combined and exit with status `0` only when every requested dependency is available.
 
 Build release binary:
 

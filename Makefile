@@ -8,7 +8,7 @@ build:
 	cd $(GO_DIR) && go build -o $(BIN) $(CMD)
 
 run:
-	go run $(CMD)
+	cd $(GO_DIR) && go run $(CMD) $(ARGS)
 
 release:
 	./scripts/build_release.sh

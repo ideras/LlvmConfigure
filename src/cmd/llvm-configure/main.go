@@ -25,8 +25,62 @@ func main() {
 	withMusl := flag.Bool("with-musl", false, "Use MUSL C library instead of GNU libc")
 	exeName := flag.String("exe-name", "", "Executable name (default: first source file basename)")
 	sourcesFile := flag.String("sources-file", "LLVMSources.txt", "Source list file name")
+	checkLLVM := flag.Bool("check-llvm", false, "Check whether required LLVM tools are installed")
+	checkMusl := flag.Bool("check-musl", false, "Check whether musl libc is installed")
+	scanLLVM := flag.Bool("scan-llvm", false, "Scan the system for LLVM tools and update the config file")
 
 	flag.Parse()
+
+	if *checkLLVM || *checkMusl || *scanLLVM {
+		cfg, err := config.LoadConfigFile()
+		if err != nil {
+			fmt.Printf("%sWarning:%s Could not load config file: %v\n", ui.ColorYellow, ui.ColorReset, err)
+			cfg = &config.Config{}
+		}
+
+		exitCode := 0
+		if *scanLLVM {
+			llvmTools, err := tools.ScanLLVMTools()
+			if err != nil {
+				fmt.Printf("%sLLVM tool scan failed:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+				exitCode = 1
+			} else {
+				cfg.LLVM = config.LLVMConfig{
+					LlvmAs: llvmTools.LlvmAs,
+					Llc:    llvmTools.Llc,
+					Lld:    llvmTools.Lld,
+				}
+				if err := config.SaveConfigFile(cfg); err != nil {
+					fmt.Printf("%sFailed to update LLVM configuration:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+					exitCode = 1
+				} else {
+					fmt.Printf("%sUpdated LLVM tool paths in the configuration file.%s\n", ui.ColorGreen, ui.ColorReset)
+				}
+			}
+		}
+
+		if *checkLLVM {
+			if _, err := tools.CheckLLVMTools(cfg); err != nil {
+				fmt.Printf("%sLLVM tools not found:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+				exitCode = 1
+			} else {
+				fmt.Printf("%sLLVM tools are installed.%s\n", ui.ColorGreen, ui.ColorReset)
+			}
+		}
+
+		if *checkMusl {
+			libcPaths, err := system.FindLibC()
+			muslPath, found := libcPaths["musl"]
+			if err != nil || !found {
+				fmt.Printf("%smusl libc not found.%s\n", ui.ColorRed, ui.ColorReset)
+				exitCode = 1
+			} else {
+				fmt.Printf("%smusl libc is installed at %s%s%s\n", ui.ColorGreen, ui.ColorCyan, muslPath, ui.ColorReset)
+			}
+		}
+
+		os.Exit(exitCode)
+	}
 
 	// Validate required flags
 	if *buildFolder == "" || *srcFolder == "" {

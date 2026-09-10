@@ -9,95 +9,118 @@ import (
 	"llvm-configure/ui"
 )
 
-// LLVMTools holds the paths to LLVM tools
+// LLVMTools holds the paths to LLVM tools.
 type LLVMTools struct {
 	LlvmAs string
 	Llc    string
 	Lld    string
 }
 
-// commandExists checks if a command exists in PATH
+type llvmToolDefinition struct {
+	name       string
+	configured string
+	command    string
+}
+
+// commandExists checks if a command exists in PATH.
 func commandExists(cmd string) bool {
 	_, err := exec.LookPath(cmd)
 	return err == nil
 }
 
-// FindLLVMTools finds LLVM tools, first checking config, then system
-func FindLLVMTools(cfg *config.Config) (*LLVMTools, error) {
-	tools := &LLVMTools{}
-	foundLlvmAs := false
-	foundLlc := false
-	foundLld := false
-
-	// Check config file first
-	if cfg.LLVM.LlvmAs != "" && commandExists(cfg.LLVM.LlvmAs) {
-		tools.LlvmAs = cfg.LLVM.LlvmAs
-		foundLlvmAs = true
-		fmt.Printf("Using llvm-as from config: %s%s%s\n", ui.ColorCyan, cfg.LLVM.LlvmAs, ui.ColorReset)
-	}
-
-	if cfg.LLVM.Llc != "" && commandExists(cfg.LLVM.Llc) {
-		tools.Llc = cfg.LLVM.Llc
-		foundLlc = true
-		fmt.Printf("Using llc from config: %s%s%s\n", ui.ColorCyan, cfg.LLVM.Llc, ui.ColorReset)
-	}
-
-	if cfg.LLVM.Lld != "" && commandExists(cfg.LLVM.Lld) {
-		tools.Lld = cfg.LLVM.Lld
-		foundLld = true
-		fmt.Printf("Using lld from config: %s%s%s\n", ui.ColorCyan, cfg.LLVM.Lld, ui.ColorReset)
-	}
-
-	// Search system for missing tools
+func findSystemTool(command string) (string, bool) {
 	for version := 20; version >= 10; version-- {
-		if !foundLlvmAs {
-			llvmAS := fmt.Sprintf("llvm-as-%d", version)
-			if commandExists(llvmAS) {
-				path, _ := exec.LookPath(llvmAS)
-				tools.LlvmAs = llvmAS
-				foundLlvmAs = true
-				fmt.Printf("Found llvm assembler at %s%s%s\n", ui.ColorCyan, path, ui.ColorReset)
-			}
-		}
-
-		if !foundLlc {
-			llc := fmt.Sprintf("llc-%d", version)
-			if commandExists(llc) {
-				path, _ := exec.LookPath(llc)
-				tools.Llc = llc
-				foundLlc = true
-				fmt.Printf("Found llvm compiler at %s%s%s\n", ui.ColorCyan, path, ui.ColorReset)
-			}
-		}
-
-		if !foundLld {
-			lld := fmt.Sprintf("lld-%d", version)
-			if commandExists(lld) {
-				path, _ := exec.LookPath(lld)
-				tools.Lld = lld
-				foundLld = true
-				fmt.Printf("Found llvm linker at %s%s%s\n", ui.ColorCyan, path, ui.ColorReset)
-			}
-		}
-
-		if foundLlvmAs && foundLlc && foundLld {
-			break
+		if path, err := exec.LookPath(fmt.Sprintf("%s-%d", command, version)); err == nil {
+			return path, true
 		}
 	}
 
-	if !foundLlvmAs || !foundLlc || !foundLld {
-		var missing []string
-		if !foundLlvmAs {
-			missing = append(missing, "LLVM assembler")
-		}
-		if !foundLlc {
-			missing = append(missing, "LLVM compiler")
-		}
-		if !foundLld {
-			missing = append(missing, "LLVM linker")
-		}
-		return nil, fmt.Errorf("missing tools: %s", strings.Join(missing, ", "))
+	path, err := exec.LookPath(command)
+	return path, err == nil
+}
+
+func resolveTool(configured, command string) (string, bool) {
+	if configured != "" && commandExists(configured) {
+		path, _ := exec.LookPath(configured)
+		return path, true
 	}
 
-	return tools, nil
+	return findSystemTool(command)
+}
+
+func missingTools(llvmAsFound, llcFound, lldFound bool) error {
+	var missing []string
+	if !llvmAsFound {
+		missing = append(missing, "LLVM assembler")
+	}
+	if !llcFound {
+		missing = append(missing, "LLVM compiler")
+	}
+	if !lldFound {
+		missing = append(missing, "LLVM linker")
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("missing tools: %s", strings.Join(missing, ", "))
+}
+
+func resolveLLVMTools(definitions []llvmToolDefinition) (*LLVMTools, error) {
+	llvmAs, llvmAsFound := resolveTool(definitions[0].configured, definitions[0].command)
+	llc, llcFound := resolveTool(definitions[1].configured, definitions[1].command)
+	lld, lldFound := resolveTool(definitions[2].configured, definitions[2].command)
+
+	if err := missingTools(llvmAsFound, llcFound, lldFound); err != nil {
+		return nil, err
+	}
+
+	return &LLVMTools{LlvmAs: llvmAs, Llc: llc, Lld: lld}, nil
+}
+
+func configuredToolDefinitions(cfg *config.Config) []llvmToolDefinition {
+	return []llvmToolDefinition{
+		{name: "LLVM assembler", configured: cfg.LLVM.LlvmAs, command: "llvm-as"},
+		{name: "LLVM compiler", configured: cfg.LLVM.Llc, command: "llc"},
+		{name: "LLVM linker", configured: cfg.LLVM.Lld, command: "lld"},
+	}
+}
+
+// CheckLLVMTools checks configured tool paths and falls back to the system PATH.
+func CheckLLVMTools(cfg *config.Config) (*LLVMTools, error) {
+	definitions := configuredToolDefinitions(cfg)
+
+	for _, tool := range definitions {
+		if tool.configured != "" {
+			fmt.Printf("Checking %s at %s%s%s ... ", tool.name, ui.ColorCyan, tool.configured, ui.ColorReset)
+			if commandExists(tool.configured) {
+				fmt.Printf("%s[Found]%s\n", ui.ColorGreen, ui.ColorReset)
+				continue
+			}
+			fmt.Printf("%s[Not Found]%s\n", ui.ColorRed, ui.ColorReset)
+		}
+
+		fmt.Printf("Checking %s in PATH ... ", tool.name)
+		if path, found := findSystemTool(tool.command); found {
+			fmt.Printf("%s[Found: %s]%s\n", ui.ColorGreen, path, ui.ColorReset)
+		} else {
+			fmt.Printf("%s[Not Found]%s\n", ui.ColorRed, ui.ColorReset)
+		}
+	}
+
+	return resolveLLVMTools(definitions)
+}
+
+// ScanLLVMTools searches the system PATH for all required LLVM tools.
+func ScanLLVMTools() (*LLVMTools, error) {
+	return resolveLLVMTools([]llvmToolDefinition{
+		{name: "LLVM assembler", command: "llvm-as"},
+		{name: "LLVM compiler", command: "llc"},
+		{name: "LLVM linker", command: "lld"},
+	})
+}
+
+// FindLLVMTools finds LLVM tools, first checking config, then the system PATH.
+func FindLLVMTools(cfg *config.Config) (*LLVMTools, error) {
+	return resolveLLVMTools(configuredToolDefinitions(cfg))
 }
