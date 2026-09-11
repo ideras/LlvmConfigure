@@ -40,7 +40,7 @@ rebuild: clean all
 # Reconfigure using LLVMSources.txt
 configure:
 	@echo "Re-running configuration from LLVMSources.txt..."
-	@{{.ExePath}} -B {{.BuildFolder}} -S {{.SrcFolder}}
+	@'{{.ExePath}}' -B '{{.BuildFolder}}' -S '{{.SrcFolder}}'
 
 # Individual bitcode targets
 {{ range .BitcodeTargets }}

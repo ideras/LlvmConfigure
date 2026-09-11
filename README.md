@@ -1,8 +1,8 @@
 # LlvmConfigure
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?logo=go)
-![Platform](https://img.shields.io/badge/Platform-Linux-blue)
+![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)
+![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-blue)
 ![LLVM](https://img.shields.io/badge/LLVM-IR-orange)
 ![Build](https://img.shields.io/badge/Build-Makefile-informational)
 
@@ -26,8 +26,8 @@ When working with LLVM IR in academic settings:
 
 * ✅ Creating a standardized build folder structure
 * ✅ Generating a properly configured `Makefile`
-* ✅ Using the system LLVM toolchain (`llvm-as`, `llc`, `lld`)
-* ✅ Auto-detects toolchain binaries and libc (glibc or musl), stores the resolved paths in a JSON configuration file, and references them when generating the Makefile to guarantee reproducible builds.
+* ✅ Using the system LLVM toolchain (`llvm-as`, `llc`, plus a platform linker driver)
+* ✅ Auto-detecting toolchain binaries, storing the resolved paths and the native **target triple** in a JSON configuration file, and referencing them when generating the `Makefile` to guarantee reproducible builds
 * ✅ Supporting clean rebuild workflows
 
 Perfect for:
@@ -39,13 +39,25 @@ Perfect for:
 
 ---
 
+## 🖥 Supported Platforms
+
+| Host | Target scope | Linker driver | Object format |
+|------|-------------|---------------|---------------|
+| Linux (amd64/arm64) | Native only | `lld` (GNU flavor) | ELF |
+| macOS (Intel & Apple Silicon) | Native only | `clang` | Mach-O |
+
+* Builds are **native only**: a macOS arm64 host produces an arm64 Mach-O executable, a macOS x86_64 host produces an x86_64 Mach-O executable, and a Linux host produces a Linux executable. Universal binaries, `lipo`, and cross-compilation are not supported.
+* On macOS the linker driver is `clang`, which selects SDK startup behavior and `libSystem`. Raw `lld` is **not** needed on macOS.
+
+---
+
 ## 📦 Features
 
 * Lightweight CLI tool written in Go
 * Generates reproducible build environments
 * Works with textual LLVM IR (`.ll`)
 * Minimal dependencies
-* Built and tested on Linux. Other operating systems may work but are unverified.
+* Built and tested on Linux and macOS
 * MIT Licensed
 
 ---
@@ -57,7 +69,8 @@ Perfect for:
 ├── src/                  # Go source code
 │   ├── go.mod
 │   └── cmd/llvm-configure
-├── scripts/build_release.sh
+├── scripts/              # Release and smoke-test scripts
+├── .github/workflows/    # CI (Linux + macOS arm64/x86_64)
 ├── Makefile              # Root build shortcuts
 └── README.md
 ```
@@ -66,10 +79,31 @@ Perfect for:
 
 ## ⚙️ Requirements
 
-* Linux environment
-* LLVM toolchain installed (`clang`, `llc`, `llvm-as`)
-* Go 1.21+ (for building from source)
+* **Linux:** GNU libc (or musl for static builds), LLVM toolchain (`llvm-as`, `llc`, `lld`)
+* **macOS:**
+  * Xcode Command Line Tools:
+
+    ```bash
+    xcode-select --install
+    ```
+
+  * Homebrew LLVM:
+
+    ```bash
+    brew install llvm
+    ```
+
+  * No separate `brew install lld` is required: Homebrew LLVM does not ship `lld` by default, and `lld` is unnecessary for the supported Darwin path.
+* Go 1.25+ (for building from source; matches `src/go.mod`)
 * GNU Make
+
+### Optional: manual `PATH` configuration
+
+Manual `PATH` configuration is **optional** — the application can query Homebrew and `xcrun` directly. If you prefer the tools on your `PATH` anyway:
+
+```bash
+export PATH="$(brew --prefix llvm)/bin:$PATH"
+```
 
 ---
 
@@ -100,43 +134,99 @@ Run via Make:
 make run ARGS="-B build -S ."
 ```
 
-Check whether the required LLVM tools are installed:
+Check whether the required LLVM tools are installed (on macOS this also validates clang, the macOS SDK, and the target triple):
 
 ```bash
 make run ARGS="--check-llvm"
 ```
 
-Check whether GNU libc is installed and contains the required startup object files:
+Check whether GNU libc is installed and contains the required startup object files (Linux only):
 
 ```bash
 make run ARGS="--check-libc"
 ```
 
-Check whether musl libc is installed:
+Check whether musl libc is installed (Linux only):
 
 ```bash
 make run ARGS="--check-musl"
 ```
 
-Refresh the LLVM paths in `~/.llvm-configure/config.json` from the current system `PATH`:
+Refresh the LLVM paths (and, on macOS, the target triple) in `~/.llvm-configure/config.json` from the current system:
 
 ```bash
 make run ARGS="--scan-llvm"
 ```
 
-Scan for GNU libc and its dynamic linker, then update their paths in `~/.llvm-configure/config.json`:
+Scan for GNU libc and its dynamic linker, then update their paths in `~/.llvm-configure/config.json` (Linux only):
 
 ```bash
 make run ARGS="--scan-libc"
 ```
 
-`--check-llvm` prints the status of each configured path and any fallback discovered in `PATH`. Dependency checks can be combined and exit with status `0` only when every requested dependency is available. Scan options can also be combined.
+### macOS behavior of libc/musl options
+
+| Option | macOS behavior | Exit status |
+|--------|----------------|-------------|
+| `--check-llvm` | Validates `llvm-as`, `llc`, clang, the macOS SDK, and the stored/detected target triple | `0` when valid, `1` otherwise |
+| `--scan-llvm` | Discovers tools and the native target triple, then persists both | `0` when saved, `1` otherwise |
+| `--check-libc` | Prints `not applicable on macOS` | `0` |
+| `--scan-libc` | Prints `not applicable on macOS`; does **not** modify the config | `0` |
+| `--check-musl` | Prints `not applicable on macOS` | `0` |
+| `--with-musl` | **Rejected**: unsupported on macOS | nonzero |
+
+`--check-llvm` prints the status of each configured path and any fallback discovered in `PATH`. Dependency checks can be combined and exit with status `0` only when every requested dependency is available. Scan options can also be combined; combined checks do not fail solely because a Linux-only check is not applicable on Darwin.
+
+`--check-llvm` prints the status of each configured path and any fallback discovered in `PATH`, including Homebrew, `xcrun --find clang`, and SDK availability.
+
+### Configuration file
+
+`~/.llvm-configure/config.json` stores the resolved toolchain. On macOS it looks like:
+
+```json
+{
+  "llvm": {
+    "llvm_as": "/opt/homebrew/opt/llvm/bin/llvm-as",
+    "llc": "/opt/homebrew/opt/llvm/bin/llc",
+    "lld": "",
+    "clang": "/usr/bin/clang"
+  },
+  "target": {
+    "triple": "arm64-apple-macosx14.0.0",
+    "deployment_target": "",
+    "detected_by": "/usr/bin/clang"
+  },
+  "libc": {
+    "use_musl": false,
+    "path": "",
+    "dyn_linker_path": ""
+  }
+}
+```
+
+* `target.triple` is detected from the selected clang (`clang -print-target-triple`), the authority for the effective native target, and is **validated before every macOS build**.
+* `target.deployment_target` is an optional macOS compatibility policy. When empty, the toolchain's default macOS target is used. When set (e.g. `13.0`), it is validated, normalized into the code-generation triple, and passed to clang as `-mmacosx-version-min`.
+* If the stored target becomes stale or no longer matches the current native clang toolchain, a build fails with an actionable message; run `--scan-llvm` to refresh it.
+* A normal build uses a valid stored target. If none is stored, the build detects the target in memory but does not silently rewrite the configuration — run `--scan-llvm` to persist it.
+* Configuration files written before the `clang`/`target` sections existed continue to load unchanged.
+* Stored Linux `libc` paths are ignored on macOS.
+* Tool paths can be overridden manually by editing the configuration; configured paths always take precedence over discovery.
 
 Build release binary:
 
 ```bash
 make release
 ```
+
+### Release binaries
+
+CI publishes architecture-named binaries for every push to `main` and pull request as workflow artifacts:
+
+* `llvm-configure-linux-amd64`
+* `llvm-configure-darwin-arm64`
+* `llvm-configure-darwin-amd64`
+
+Pushing a tag `v*` (e.g. `v1.0.0`) additionally publishes them as assets of an automatically generated GitHub release. The macOS binaries must be run on a matching-architecture Mac; the tool binary is cross-buildable, but the LLVM projects it generates still build natively on their target host.
 
 The tool will:
 

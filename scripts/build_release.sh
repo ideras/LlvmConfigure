@@ -13,7 +13,12 @@ if ! command -v go &> /dev/null; then
     exit 1
 fi
 
-BIN_NAME="llvm-configure"
+GOOS="$(go env GOOS)"
+GOARCH="$(go env GOARCH)"
+
+# Architecture-specific artifact naming:
+#   llvm-configure-linux-amd64, llvm-configure-darwin-arm64, ...
+BIN_NAME="llvm-configure-${GOOS}-${GOARCH}"
 
 (cd "$GO_DIR" && CGO_ENABLED=0 go build -ldflags="-s -w" -o "$ROOT_DIR/build/$BIN_NAME" ./cmd/llvm-configure)
 
@@ -22,10 +27,14 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-if command -v upx &> /dev/null
+# UPX compression:
+#   - the binary is written to build/, not the repository root
+#   - UPX cannot compress Mach-O arm64 artifacts, so only attempt it on
+#     Linux/amd64, where it is known to work
+if [ "$GOOS" = "linux" ] && [ "$GOARCH" = "amd64" ] && command -v upx &> /dev/null
 then
     echo "UPX found, will compress the binary."
-    upx --best "$ROOT_DIR/$BIN_NAME"
+    upx --best "$ROOT_DIR/build/$BIN_NAME"
 else
-    echo "UPX not found, skipping compression."
+    echo "UPX compression skipped (supported for linux-amd64 artifacts only)."
 fi
