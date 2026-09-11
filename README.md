@@ -106,6 +106,12 @@ Check whether the required LLVM tools are installed:
 make run ARGS="--check-llvm"
 ```
 
+Check whether GNU libc is installed and contains the required startup object files:
+
+```bash
+make run ARGS="--check-libc"
+```
+
 Check whether musl libc is installed:
 
 ```bash
@@ -118,7 +124,13 @@ Refresh the LLVM paths in `~/.llvm-configure/config.json` from the current syste
 make run ARGS="--scan-llvm"
 ```
 
-`--check-llvm` prints the status of each configured path and any fallback discovered in `PATH`. The checks can be combined and exit with status `0` only when every requested dependency is available.
+Scan for GNU libc and its dynamic linker, then update their paths in `~/.llvm-configure/config.json`:
+
+```bash
+make run ARGS="--scan-libc"
+```
+
+`--check-llvm` prints the status of each configured path and any fallback discovered in `PATH`. Dependency checks can be combined and exit with status `0` only when every requested dependency is available. Scan options can also be combined.
 
 Build release binary:
 

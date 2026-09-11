@@ -26,12 +26,14 @@ func main() {
 	exeName := flag.String("exe-name", "", "Executable name (default: first source file basename)")
 	sourcesFile := flag.String("sources-file", "LLVMSources.txt", "Source list file name")
 	checkLLVM := flag.Bool("check-llvm", false, "Check whether required LLVM tools are installed")
+	checkLibC := flag.Bool("check-libc", false, "Check whether GNU libc is installed")
 	checkMusl := flag.Bool("check-musl", false, "Check whether musl libc is installed")
 	scanLLVM := flag.Bool("scan-llvm", false, "Scan the system for LLVM tools and update the config file")
+	scanLibC := flag.Bool("scan-libc", false, "Scan the system for GNU libc and update the config file")
 
 	flag.Parse()
 
-	if *checkLLVM || *checkMusl || *scanLLVM {
+	if *checkLLVM || *checkLibC || *checkMusl || *scanLLVM || *scanLibC {
 		cfg, err := config.LoadConfigFile()
 		if err != nil {
 			fmt.Printf("%sWarning:%s Could not load config file: %v\n", ui.ColorYellow, ui.ColorReset, err)
@@ -59,12 +61,58 @@ func main() {
 			}
 		}
 
+		if *scanLibC {
+			libcPaths, err := system.FindLibC()
+			libcPath, found := libcPaths["gnu"]
+			if err != nil {
+				fmt.Printf("%sGNU libc scan failed:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+				exitCode = 1
+			} else if !found {
+				fmt.Printf("%sGNU libc scan failed:%s GNU libc not found\n", ui.ColorRed, ui.ColorReset)
+				exitCode = 1
+			} else if err := system.CheckObjectFiles(libcPath); err != nil {
+				fmt.Printf("%sGNU libc scan failed:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+				exitCode = 1
+			} else {
+				dynLinkerPath, err := system.GetDynamicLinkerPath()
+				if err != nil {
+					fmt.Printf("%sGNU libc scan failed:%s cannot find dynamic linker: %v\n", ui.ColorRed, ui.ColorReset, err)
+					exitCode = 1
+				} else {
+					cfg.LibC = config.LibCConfig{
+						Path:          libcPath,
+						DynLinkerPath: dynLinkerPath,
+					}
+					if err := config.SaveConfigFile(cfg); err != nil {
+						fmt.Printf("%sFailed to update GNU libc configuration:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+						exitCode = 1
+					} else {
+						fmt.Printf("%sUpdated GNU libc and dynamic linker paths in the configuration file.%s\n", ui.ColorGreen, ui.ColorReset)
+					}
+				}
+			}
+		}
+
 		if *checkLLVM {
 			if _, err := tools.CheckLLVMTools(cfg); err != nil {
 				fmt.Printf("%sLLVM tools not found:%s %v\n", ui.ColorRed, ui.ColorReset, err)
 				exitCode = 1
 			} else {
 				fmt.Printf("%sLLVM tools are installed.%s\n", ui.ColorGreen, ui.ColorReset)
+			}
+		}
+
+		if *checkLibC {
+			libcPaths, err := system.FindLibC()
+			libcPath, found := libcPaths["gnu"]
+			if err != nil || !found {
+				fmt.Printf("%sGNU libc not found.%s\n", ui.ColorRed, ui.ColorReset)
+				exitCode = 1
+			} else if err := system.CheckObjectFiles(libcPath); err != nil {
+				fmt.Printf("%sGNU libc is incomplete:%s %v\n", ui.ColorRed, ui.ColorReset, err)
+				exitCode = 1
+			} else {
+				fmt.Printf("%sGNU libc is installed at %s%s%s\n", ui.ColorGreen, ui.ColorCyan, libcPath, ui.ColorReset)
 			}
 		}
 
