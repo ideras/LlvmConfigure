@@ -33,15 +33,21 @@ xcrun --sdk macosx --show-sdk-path >/dev/null || fail "no macOS SDK found"
 pass "macOS SDK available"
 
 # 2. Homebrew LLVM
+# brew --prefix llvm exits 0 and prints the expected opt path even when
+# the formula is not installed, so decide from the llvm-as binary, not
+# from the prefix command's exit status.
 if [ -z "$BREW" ]; then
     fail "Homebrew (brew) not found; install it from https://brew.sh"
 fi
-if ! "$BREW" --prefix llvm >/dev/null 2>&1; then
+LLVM_PREFIX="$("$BREW" --prefix llvm 2>/dev/null || true)"
+if [ -z "$LLVM_PREFIX" ] || [ ! -x "$LLVM_PREFIX/bin/llvm-as" ]; then
     echo "Installing llvm via Homebrew (this may take a while)..."
     "$BREW" install llvm
 fi
 LLVM_PREFIX="$("$BREW" --prefix llvm)"
-[ -x "$LLVM_PREFIX/bin/llvm-as" ] || fail "llvm-as missing from Homebrew LLVM"
+[ -x "$LLVM_PREFIX/bin/llvm-as" ] || fail "llvm-as missing from Homebrew LLVM after install"
+[ -x "$LLVM_PREFIX/bin/llc" ] || fail "llc missing from Homebrew LLVM after install"
+[ -x "$LLVM_PREFIX/bin/clang" ] || fail "clang missing from Homebrew LLVM after install"
 pass "Homebrew LLVM at $LLVM_PREFIX"
 
 # Ensure Homebrew LLVM is NOT on PATH so discovery must use the fallbacks.
