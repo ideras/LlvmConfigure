@@ -14,8 +14,8 @@ jobs:
     name: Linux amd64
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: src/go.mod
       - name: go vet
@@ -28,7 +28,7 @@ jobs:
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o ../build/llvm-configure-linux-amd64 ./cmd/llvm-configure
         working-directory: src
       - name: Upload artifact (llvm-configure-linux-amd64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: llvm-configure-linux-amd64
           path: build/llvm-configure-linux-amd64
@@ -40,8 +40,8 @@ jobs:
     # the current GA arm64 image.
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: src/go.mod
       - name: Assert runner architecture
@@ -61,7 +61,7 @@ jobs:
         run: |
           ./scripts/darwin_smoke_test.sh build/llvm-configure-darwin-arm64 arm64
       - name: Upload artifact (llvm-configure-darwin-arm64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: llvm-configure-darwin-arm64
           path: build/llvm-configure-darwin-arm64
@@ -73,8 +73,8 @@ jobs:
     # macos-15-intel is the current GA x64 macOS image.
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: src/go.mod
       - name: Assert runner architecture
@@ -94,7 +94,7 @@ jobs:
         run: |
           ./scripts/darwin_smoke_test.sh build/llvm-configure-darwin-amd64 x86_64
       - name: Upload artifact (llvm-configure-darwin-amd64)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: llvm-configure-darwin-amd64
           path: build/llvm-configure-darwin-amd64
@@ -109,12 +109,12 @@ jobs:
       contents: write
     steps:
       - name: Download built binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: build
           merge-multiple: true
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: build/llvm-configure-*
           generate_release_notes: true
